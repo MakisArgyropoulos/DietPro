@@ -67,6 +67,8 @@ total_fiber = 0
 selected_rows = []
 
 for item in [breakfast, snack1, main_meal, snack2, second_meal, snack3]:
+    if item == "Τίποτα":
+        continue  # αγνόησε τα κενά
     row = df[df["Επιλογή"] == item]
     if not row.empty:
         total_cal += row["Θερμίδες (kcal)"].values[0]
@@ -76,8 +78,8 @@ for item in [breakfast, snack1, main_meal, snack2, second_meal, snack3]:
         total_fiber += row["Φυτικές ίνες (g)"].values[0]
         selected_rows.append(row)
 
-# --- Φτιάχνουμε dataframe με ΟΛΕΣ τις επιλογές (και επαναλήψεις) ---
 selected_df = pd.concat(selected_rows, ignore_index=True)
+
 
 
 
