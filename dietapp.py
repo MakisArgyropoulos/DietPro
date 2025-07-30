@@ -57,7 +57,28 @@ snack3 = st.selectbox("Σνακ 3", snack_options, key="snack3")
 
 # --- Συλλογή επιλεγμένων ---
 selected_items = [x for x in [breakfast, snack1, main_meal, snack2, second_meal, snack3] if x != "Τίποτα"]
-selected_df = df[df["Επιλογή"].isin(selected_items)]
+
+# --- Υπολογισμοί με επαναλαμβανόμενες επιλογές ---
+total_cal = 0
+total_prot = 0
+total_carb = 0
+total_fat = 0
+total_fiber = 0
+selected_rows = []
+
+for item in [breakfast, snack1, main_meal, snack2, second_meal, snack3]:
+    row = df[df["Επιλογή"] == item]
+    if not row.empty:
+        total_cal += row["Θερμίδες (kcal)"].values[0]
+        total_prot += row["Πρωτεΐνη (g)"].values[0]
+        total_carb += row["Υδατάνθρακες (g)"].values[0]
+        total_fat += row["Λίπος (g)"].values[0]
+        total_fiber += row["Φυτικές ίνες (g)"].values[0]
+        selected_rows.append(row)
+
+# --- Φτιάχνουμε dataframe με ΟΛΕΣ τις επιλογές (και επαναλήψεις) ---
+selected_df = pd.concat(selected_rows, ignore_index=True)
+
 
 
 # --- Υπολογισμοί ---
