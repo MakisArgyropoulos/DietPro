@@ -55,30 +55,49 @@ snack2 = st.selectbox("Σνακ 2", snack_options, key="snack2")
 second_meal = st.selectbox("Δεύτερο Γεύμα", second_meal_options, key="second_meal")
 snack3 = st.selectbox("Σνακ 3", snack_options, key="snack3")
 
-# --- Συλλογή επιλεγμένων ---
-selected_items = [x for x in [breakfast, snack1, main_meal, snack2, second_meal, snack3] if x != "Τίποτα"]
+# --- Σταθερή σειρά επιλογών ---
+choices = {
+    "Πρωινό": breakfast,
+    "Σνακ 1": snack1,
+    "Κυρίως Γεύμα": main_meal,
+    "Σνακ 2": snack2,
+    "Δεύτερο Γεύμα": second_meal,
+    "Σνακ 3": snack3
+}
 
-# --- Υπολογισμοί με επαναλαμβανόμενες επιλογές ---
-total_cal = 0
-total_prot = 0
-total_carb = 0
-total_fat = 0
-total_fiber = 0
-selected_rows = []
+rows = []
+total_cal = total_prot = total_carb = total_fat = total_fiber = 0
 
-for item in [breakfast, snack1, main_meal, snack2, second_meal, snack3]:
-    if item == "Τίποτα":
-        continue  # αγνόησε τα κενά
+for category, item in choices.items():
     row = df[df["Επιλογή"] == item]
     if not row.empty:
-        total_cal += row["Θερμίδες (kcal)"].values[0]
-        total_prot += row["Πρωτεΐνη (g)"].values[0]
-        total_carb += row["Υδατάνθρακες (g)"].values[0]
-        total_fat += row["Λίπος (g)"].values[0]
-        total_fiber += row["Φυτικές ίνες (g)"].values[0]
-        selected_rows.append(row)
+        cal = row["Θερμίδες (kcal)"].values[0]
+        prot = row["Πρωτεΐνη (g)"].values[0]
+        carb = row["Υδατάνθρακες (g)"].values[0]
+        fat = row["Λίπος (g)"].values[0]
+        fiber = row["Φυτικές ίνες (g)"].values[0]
+    else:
+        cal = prot = carb = fat = fiber = 0
 
-selected_df = pd.concat(selected_rows, ignore_index=True)
+    rows.append({
+        "Κατηγορία": category,
+        "Επιλογή": item,
+        "Θερμίδες (kcal)": cal,
+        "Πρωτεΐνη (g)": prot,
+        "Υδατάνθρακες (g)": carb,
+        "Λίπος (g)": fat,
+        "Φυτικές ίνες (g)": fiber
+    })
+
+    total_cal += cal
+    total_prot += prot
+    total_carb += carb
+    total_fat += fat
+    total_fiber += fiber
+
+# DataFrame για εμφάνιση
+selected_df = pd.DataFrame(rows)
+
 
 
 
