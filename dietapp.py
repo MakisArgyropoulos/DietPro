@@ -10,11 +10,19 @@ import io
 SHEET_URL = "https://docs.google.com/spreadsheets/d/14w_r_xHdVkekACZ7EK-G8HeAA2-jG4x2arPdYoxMNvQ/edit?gid=0#gid=0"  # Βάλε το link του Sheet σου
 SERVICE_ACCOUNT_FILE = "service_account.json"  # Το JSON που κατέβασες από Google Cloud
 
-# --- Σύνδεση με Google Sheets ---
+import json
+
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+
+if "gcp_service_account" in st.secrets:
+    creds_dict = st.secrets["gcp_service_account"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
+else:
+    creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+
 client = gspread.authorize(creds)
 sheet = client.open_by_url(SHEET_URL).sheet1
+
 
 # --- Δεδομένα ---
 data = {
