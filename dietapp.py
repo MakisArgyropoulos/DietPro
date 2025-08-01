@@ -179,27 +179,40 @@ selected_date = st.date_input("Ημερομηνία καταχώρησης", val
 
 # --- Αποθήκευση Ημέρας στο Google Sheet ---
 if st.button("Αποθήκευση Ημέρας"):
+    # Νέα γραμμή με σωστούς τύπους
     new_row = [
-    str(selected_date),
-    str(breakfast),
-    str(snack1),
-    str(main_meal),
-    str(snack2),
-    str(second_meal),
-    str(snack3),
-    int(total_cal),
-    float(total_prot),
-    float(prot_pct),
-    float(total_carb),
-    float(carb_pct),
-    float(total_fat),
-    float(fat_pct),
-    float(total_fiber),
-    float(fiber_pct)
-]
+        str(selected_date),
+        str(breakfast),
+        str(snack1),
+        str(main_meal),
+        str(snack2),
+        str(second_meal),
+        str(snack3),
+        int(total_cal),
+        float(total_prot),
+        float(prot_pct),
+        float(total_carb),
+        float(carb_pct),
+        float(total_fat),
+        float(fat_pct),
+        float(total_fiber),
+        float(fiber_pct)
+    ]
 
+    # Φέρε όλα τα δεδομένα
+    all_rows = sheet.get_all_values()
+    headers = all_rows[0]
+    data = all_rows[1:]
+
+    # Διέγραψε όλες τις γραμμές που έχουν ήδη αυτή την ημερομηνία
+    indices_to_delete = [i+2 for i, row in enumerate(data) if row and row[0] == str(selected_date)]  # +2 λόγω header και 1-based indexing
+    for idx in sorted(indices_to_delete, reverse=True):
+        sheet.delete_rows(idx)
+
+    # Πρόσθεσε τη νέα γραμμή
     sheet.append_row(new_row)
-    st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε στο Google Sheet!")
+    st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε (αντικαταστάθηκε η παλιά, αν υπήρχε).")
+
 
 
 
