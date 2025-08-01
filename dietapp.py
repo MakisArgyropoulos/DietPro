@@ -2,8 +2,19 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import datetime
-import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 import io
+
+# --- ΡΥΘΜΙΣΕΙΣ GOOGLE SHEETS ---
+SHEET_URL = "https://docs.google.com/spreadsheets/d/14w_r_xHdVkekACZ7EK-G8HeAA2-jG4x2arPdYoxMNvQ/edit?gid=0#gid=0"  # Βάλε το link του Sheet σου
+SERVICE_ACCOUNT_FILE = "service_account.json"  # Το JSON που κατέβασες από Google Cloud
+
+# --- Σύνδεση με Google Sheets ---
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+client = gspread.authorize(creds)
+sheet = client.open_by_url(SHEET_URL).sheet1
 
 # --- Δεδομένα ---
 data = {
@@ -158,62 +169,38 @@ fiber_pct = round((total_fiber / fiber_target) * 100, 1)
 # --- Επιλογή ημερομηνίας ---
 selected_date = st.date_input("Ημερομηνία καταχώρησης", value=datetime.date.today())
 
-# --- Αποθήκευση Ημέρας ---
-history_file = "history.csv"
+# --- Αποθήκευση Ημέρας στο Google Sheet ---
 if st.button("Αποθήκευση Ημέρας"):
-    # Δημιουργία νέας εγγραφής
-    new_entry = {
-        "Ημερομηνία": str(selected_date),
-        "Πρωινό": breakfast,
-        "Σνακ1": snack1,
-        "Κυρίως Γεύμα": main_meal,
-        "Σνακ2": snack2,
-        "Δεύτερο Γεύμα": second_meal,
-        "Σνακ3": snack3,
-        "Θερμίδες": total_cal,
-        "Πρωτεΐνη": total_prot,
-        "Πρωτεΐνη_%": prot_pct,
-        "Υδατάνθρακες": total_carb,
-        "Υδατάνθρακες_%": carb_pct,
-        "Λίπος": total_fat,
-        "Λίπος_%": fat_pct,
-        "Φυτικές ίνες": total_fiber,
-        "Φυτικές ίνες_%": fiber_pct
-    }
+    new_row = [
+    str(selected_date),
+    str(breakfast),
+    str(snack1),
+    str(main_meal),
+    str(snack2),
+    str(second_meal),
+    str(snack3),
+    int(total_cal),
+    float(total_prot),
+    float(prot_pct),
+    float(total_carb),
+    float(carb_pct),
+    float(total_fat),
+    float(fat_pct),
+    float(total_fiber),
+    float(fiber_pct)
+]
 
-    # Φόρτωσε / ενημέρωσε το ιστορικό
-    if os.path.exists(history_file):
-        history_df = pd.read_csv(history_file)
-        # Αν υπάρχει ήδη εγγραφή για την ημερομηνία → σβήσε την
-        history_df = history_df[history_df["Ημερομηνία"] != str(selected_date)]
-        # Πρόσθεσε τη νέα
-        history_df = pd.concat([history_df, pd.DataFrame([new_entry])], ignore_index=True)
-    else:
-        history_df = pd.DataFrame([new_entry])
-
-    # Αποθήκευση
-    history_df.to_csv(history_file, index=False)
-    st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε!")
+    sheet.append_row(new_row)
+    st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε στο Google Sheet!")
 
 
 
 
-# --- Προβολή Ιστορικού & Λήψη ---
-if os.path.exists(history_file):
-    st.subheader("Ιστορικό Ημερών")
-    history_df = pd.read_csv(history_file)
-
-    # Εμφάνιση πίνακα με κουμπί διαγραφής
-    for i, row in history_df.iterrows():
-        col1, col2 = st.columns([6,1])
-        with col1:
-            st.write(f"{row['Ημερομηνία']} | Θερμίδες: {row['Θερμίδες']} kcal | Πρωτεΐνη: {row['Πρωτεΐνη']}g")
-        with col2:
-            if st.button("Διαγραφή", key=f"del_{i}"):
-                history_df = history_df.drop(i)
-                history_df.to_csv(history_file, index=False)
-                st.success(f"Η καταχώρηση της {row['Ημερομηνία']} διαγράφηκε.")
-                st.rerun()
+st.subheader("Ιστορικό Ημερών")
+rows = sheet.get_all_records()
+if rows:
+    history_df = pd.DataFrame(rows)
+    st.dataframe(history_df)
 
     # Κατέβασμα Excel
     output = io.BytesIO()
@@ -225,4 +212,5 @@ if os.path.exists(history_file):
         file_name="history.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
+else:
+    st.info("Δεν υπάρχουν καταχωρήσεις ακόμα.")
