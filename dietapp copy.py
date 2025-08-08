@@ -5,11 +5,12 @@ import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import io
-import json
 
 # --- ΡΥΘΜΙΣΕΙΣ GOOGLE SHEETS ---
-SHEET_URL = "https://docs.google.com/spreadsheets/d/14w_r_xHdVkekACZ7EK-G8HeAA2-jG4x2arPdYoxMNvQ/edit?gid=0#gid=0"
-SERVICE_ACCOUNT_FILE = "service_account.json"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/14w_r_xHdVkekACZ7EK-G8HeAA2-jG4x2arPdYoxMNvQ/edit?gid=0#gid=0"  # Βάλε το link του Sheet σου
+SERVICE_ACCOUNT_FILE = "service_account.json"  # Το JSON που κατέβασες από Google Cloud
+
+import json
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
@@ -21,6 +22,10 @@ else:
 
 client = gspread.authorize(creds)
 sheet = client.open_by_url(SHEET_URL).sheet1
+
+
+import pandas as pd
+import pandas as pd
 
 # --- Δεδομένα ---
 data = {
@@ -120,6 +125,7 @@ data = {
 
 df = pd.DataFrame(data)
 
+
 st.set_page_config(page_title="DietPro", layout="centered")
 st.title("DietPro – Ημερήσιος Υπολογισμός Θερμίδων & Μακροθρεπτικών")
 st.write("Επίλεξε 3 σνακ και 3 γεύματα. Μπορείς να αποθηκεύσεις την ημέρα σου και να κατεβάσεις το ιστορικό.")
@@ -149,6 +155,7 @@ choices = {
 }
 
 rows = []
+total_cal = total_prot = total_carb = total_fat = total_fiber = 0
 
 for category, item in choices.items():
     row = df[df["Επιλογή"] == item]
@@ -160,8 +167,7 @@ for category, item in choices.items():
         fiber = row["Φυτικές ίνες (g)"].values[0]
         sat_fat = row["Κορεσμένα (g)"].values[0]
     else:
-        cal = prot = carb = fat = fiber = 0
-        sat_fat = 0  # FIX: αποφυγή UnboundLocalError
+        cal = prot = carb = fat = fiber = sat_fat = 0
 
     rows.append({
         "Κατηγορία": category,
@@ -174,7 +180,18 @@ for category, item in choices.items():
         "Κορεσμένα (g)": sat_fat
     })
 
+    total_cal += cal
+    total_prot += prot
+    total_carb += carb
+    total_fat += fat
+    total_fiber += fiber
+
+# DataFrame για εμφάνιση
 selected_df = pd.DataFrame(rows)
+
+
+
+
 
 # --- Υπολογισμοί ---
 total_cal = selected_df["Θερμίδες (kcal)"].sum()
@@ -184,81 +201,107 @@ total_fat = selected_df["Λίπος (g)"].sum()
 total_fiber = selected_df["Φυτικές ίνες (g)"].sum()
 total_sat_fat = selected_df["Κορεσμένα (g)"].sum()
 
-# --- Ποσοστά θερμίδων ανά μακρο ---
-if total_cal > 0:
-    prot_pct_cal = round((total_prot * 4) / total_cal * 100, 1)
-    carb_pct_cal = round((total_carb * 4) / total_cal * 100, 1)
-    fat_pct_cal = round((total_fat * 9) / total_cal * 100, 1)
-else:
-    prot_pct_cal = carb_pct_cal = fat_pct_cal = 0.0
-
-# --- Κάλυψη στόχων ---
-prot_target, carb_target, fat_target, fiber_target, sat_fat_target = 150, 200, 70, 25, 20
-prot_cov = round((total_prot / prot_target) * 100, 1)
-carb_cov = round((total_carb / carb_target) * 100, 1)
-fat_cov = round((total_fat / fat_target) * 100, 1)
-fiber_cov = round((total_fiber / fiber_target) * 100, 1)
-sat_fat_cov = round((total_sat_fat / sat_fat_target) * 100, 1)
-
-# --- Εμφάνιση σύνολο ---
 st.subheader("Σύνολο:")
 st.write(f"**Θερμίδες:** {total_cal} kcal")
-st.write(f"**Πρωτεΐνη:** {total_prot} g ({prot_pct_cal}% θερμίδων) | **Υδατάνθρακες:** {total_carb} g ({carb_pct_cal}% θερμίδων) | **Λίπος:** {total_fat} g ({fat_pct_cal}% θερμίδων)")
-st.write(f"**Φυτικές ίνες:** {total_fiber} g | **Κορεσμένα:** {total_sat_fat} g")
+st.write(f"**Πρωτεΐνη:** {total_prot} g | **Υδατάνθρακες:** {total_carb} g | **Λίπος:** {total_fat} g | **Φυτικές ίνες:** {total_fiber} g | **Κορεσμένα:** {total_sat_fat} g")
 
-# --- Progress Bars Κάλυψης Στόχων ---
-st.subheader("Κάλυψη Στόχων:")
-st.write(f"Πρωτεΐνη: {prot_cov}%")
+# --- Στόχοι ---
+prot_target = 150
+carb_target = 200
+fat_target = 70
+fiber_target = 25
+sat_fat_target = 20
+
+# --- Progress για κάθε μακροθρεπτικό ---
+st.subheader("Κάλυψη Στόχων Μακροθρεπτικών:")
+st.write(f"Πρωτεΐνη: {total_prot}g / {prot_target}g")
 st.progress(min(total_prot / prot_target, 1.0))
-st.write(f"Υδατάνθρακες: {carb_cov}%")
+
+st.write(f"Υδατάνθρακες: {total_carb}g / {carb_target}g")
 st.progress(min(total_carb / carb_target, 1.0))
-st.write(f"Λίπος: {fat_cov}%")
+
+st.write(f"Λίπος: {total_fat}g / {fat_target}g")
 st.progress(min(total_fat / fat_target, 1.0))
-st.write(f"Φυτικές ίνες: {fiber_cov}%")
+
+st.write(f"Φυτικές ίνες: {total_fiber}g / {fiber_target}g")
 st.progress(min(total_fiber / fiber_target, 1.0))
-st.write(f"Κορεσμένα: {sat_fat_cov}%")
+
+st.write(f"Κορεσμένα: {total_sat_fat}g / {sat_fat_target}g")
 st.progress(min(total_sat_fat / sat_fat_target, 1.0))
 
-# --- Pie Chart με θερμίδες μακρο ---
+
+
+
+# --- Διάγραμμα Πίτας ---
 if total_cal > 0:
-    macros_kcal = {"Πρωτεΐνη": total_prot * 4, "Υδατάνθρακες": total_carb * 4, "Λίπος": total_fat * 9}
-    fig = px.pie(values=list(macros_kcal.values()), names=list(macros_kcal.keys()), title="Κατανομή Μακρο (σε θερμίδες)")
+    macros = {"Πρωτεΐνη": total_prot, "Υδατάνθρακες": total_carb, "Λίπος": total_fat}
+    fig = px.pie(values=macros.values(), names=macros.keys(), title="Κατανομή Μακροθρεπτικών")
     st.plotly_chart(fig)
 
-# --- Εμφάνιση επιλογών ---
 st.write("Αναλυτικά:")
 st.dataframe(selected_df)
+
+# --- Υπολογισμός ποσοστών κάλυψης ---
+
+prot_pct = round((total_prot / prot_target) * 100, 1)
+carb_pct = round((total_carb / carb_target) * 100, 1)
+fat_pct = round((total_fat / fat_target) * 100, 1)
+fiber_pct = round((total_fiber / fiber_target) * 100, 1)
+sat_fat_pct = round((total_sat_fat / sat_fat_target) * 100, 1)
+
 
 # --- Επιλογή ημερομηνίας ---
 selected_date = st.date_input("Ημερομηνία καταχώρησης", value=datetime.date.today())
 
-# --- Αποθήκευση ---
+# --- Αποθήκευση Ημέρας στο Google Sheet ---
 if st.button("Αποθήκευση Ημέρας"):
+    # Νέα γραμμή με σωστούς τύπους
     new_row = [
         str(selected_date),
-        str(breakfast), str(snack1), str(main_meal),
-        str(snack2), str(second_meal), str(snack3),
+        str(breakfast),
+        str(snack1),
+        str(main_meal),
+        str(snack2),
+        str(second_meal),
+        str(snack3),
         int(total_cal),
-        float(total_prot), float(prot_pct_cal),
-        float(total_carb), float(carb_pct_cal),
-        float(total_fat), float(fat_pct_cal),
-        float(total_fiber), float(fiber_cov)
+        float(total_prot),
+        float(prot_pct),
+        float(total_carb),
+        float(carb_pct),
+        float(total_fat),
+        float(fat_pct),
+        float(total_sat_fat),
+        float(sat_fat_pct),
+        float(total_fiber),
+        float(fiber_pct)
     ]
 
+    # Φέρε όλα τα δεδομένα
     all_rows = sheet.get_all_values()
+    headers = all_rows[0]
     data = all_rows[1:]
-    indices_to_delete = [i+2 for i, row in enumerate(data) if row and row[0] == str(selected_date)]
+
+    # Διέγραψε όλες τις γραμμές που έχουν ήδη αυτή την ημερομηνία
+    indices_to_delete = [i+2 for i, row in enumerate(data) if row and row[0] == str(selected_date)]  # +2 λόγω header και 1-based indexing
     for idx in sorted(indices_to_delete, reverse=True):
         sheet.delete_rows(idx)
-    sheet.append_row(new_row)
-    st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε.")
 
-# --- Ιστορικό ---
+    # Πρόσθεσε τη νέα γραμμή
+    sheet.append_row(new_row)
+    st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε (αντικαταστάθηκε η παλιά, αν υπήρχε).")
+
+
+
+
+
 st.subheader("Ιστορικό Ημερών")
 rows = sheet.get_all_records()
 if rows:
     history_df = pd.DataFrame(rows)
     st.dataframe(history_df)
+
+    # Κατέβασμα Excel
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         history_df.to_excel(writer, index=False, sheet_name='Ιστορικό')
