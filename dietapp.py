@@ -240,16 +240,15 @@ if total_cal > 0:
 
 st.write("Αναλυτικά:")
 st.dataframe(selected_df)
+
 # --- Υπολογισμός ποσοστών κάλυψης ---
-prot_target = 150
-carb_target = 200
-fat_target = 70
-fiber_target = 25
 
 prot_pct = round((total_prot / prot_target) * 100, 1)
 carb_pct = round((total_carb / carb_target) * 100, 1)
 fat_pct = round((total_fat / fat_target) * 100, 1)
 fiber_pct = round((total_fiber / fiber_target) * 100, 1)
+sat_fat_pct = round((total_sat_fat / sat_fat_target) * 100, 1)
+
 
 # --- Επιλογή ημερομηνίας ---
 selected_date = st.date_input("Ημερομηνία καταχώρησης", value=datetime.date.today())
@@ -272,6 +271,8 @@ if st.button("Αποθήκευση Ημέρας"):
         float(carb_pct),
         float(total_fat),
         float(fat_pct),
+        float(total_sat_fat),
+        float(sat_fat_pct),
         float(total_fiber),
         float(fiber_pct)
     ]
