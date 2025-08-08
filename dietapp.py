@@ -4,25 +4,41 @@ import plotly.express as px
 import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from gspread.exceptions import GSpreadException
 import io
 import json
 
-# --- ΡΥΘΜΙΣΕΙΣ GOOGLE SHEETS ---
+# ---------------- Google Sheets setup ----------------
 SHEET_URL = "https://docs.google.com/spreadsheets/d/14w_r_xHdVkekACZ7EK-G8HeAA2-jG4x2arPdYoxMNvQ/edit?gid=0#gid=0"
 SERVICE_ACCOUNT_FILE = "service_account.json"
-
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 if "gcp_service_account" in st.secrets:
     creds_dict = st.secrets["gcp_service_account"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
 else:
-    creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
 
 client = gspread.authorize(creds)
 sheet = client.open_by_url(SHEET_URL).sheet1
 
-# --- Δεδομένα ---
+# Ensure headers exist (and match expected)
+EXPECTED_HEADERS = [
+    "Ημερομηνία","Πρωινό","Σνακ1","Κυρίως Γεύμα","Σνακ2","Δεύτερο Γεύμα","Σνακ3",
+    "Θερμίδες","Πρωτεΐνη","Πρωτεΐνη_%","Υδατάνθρακες","Υδατάνθρακες_%","Λίπος","Λίπος_%",
+    "Κορεσμένα","Κορεσμένα_%","Φυτικές ίνες","Φυτικές ίνες_%"
+]
+all_vals = sheet.get_all_values()
+if not all_vals:
+    sheet.insert_row(EXPECTED_HEADERS, 1)
+else:
+    current_headers = all_vals[0]
+    # If different, rewrite headers (comment out if you don't want auto-fix)
+    if len(current_headers) != len(EXPECTED_HEADERS) or current_headers != EXPECTED_HEADERS:
+        sheet.delete_rows(1)
+        sheet.insert_row(EXPECTED_HEADERS, 1)
+
+# ---------------- Data ----------------
 data = {
     "Κατηγορία": [
         "Σνακ","Σνακ","Σνακ","Σνακ","Σνακ","Σνακ","Σνακ","Σνακ","Σνακ",
@@ -117,20 +133,19 @@ data = {
         0,4,5,4,5,4,3.5,3,6,3.5,6,4,5,4
     ]
 }
-
 df = pd.DataFrame(data)
 
+# ---------------- UI ----------------
 st.set_page_config(page_title="DietPro", layout="centered")
 st.title("DietPro – Ημερήσιος Υπολογισμός Θερμίδων & Μακροθρεπτικών")
 st.write("Επίλεξε 3 σνακ και 3 γεύματα. Μπορείς να αποθηκεύσεις την ημέρα σου και να κατεβάσεις το ιστορικό.")
 
-# --- Επιλογές ανά κατηγορία ---
+# Options per category
 breakfast_options = df[df["Κατηγορία"] == "Πρωινό"]["Επιλογή"].tolist()
 snack_options = df[df["Κατηγορία"] == "Σνακ"]["Επιλογή"].tolist()
 main_meal_options = df[df["Κατηγορία"] == "Κυρίως Γεύμα"]["Επιλογή"].tolist()
 second_meal_options = df[df["Κατηγορία"] == "Δεύτερο Γεύμα"]["Επιλογή"].tolist()
 
-# --- Επιλογές με σειρά ---
 breakfast = st.selectbox("Πρωινό", breakfast_options, key="breakfast")
 snack1 = st.selectbox("Σνακ 1", snack_options, key="snack1")
 main_meal = st.selectbox("Κυρίως Γεύμα", main_meal_options, key="main_meal")
@@ -138,7 +153,6 @@ snack2 = st.selectbox("Σνακ 2", snack_options, key="snack2")
 second_meal = st.selectbox("Δεύτερο Γεύμα", second_meal_options, key="second_meal")
 snack3 = st.selectbox("Σνακ 3", snack_options, key="snack3")
 
-# --- Σταθερή σειρά επιλογών ---
 choices = {
     "Πρωινό": breakfast,
     "Σνακ 1": snack1,
@@ -148,8 +162,8 @@ choices = {
     "Σνακ 3": snack3
 }
 
+# Build selection table
 rows = []
-
 for category, item in choices.items():
     row = df[df["Επιλογή"] == item]
     if not row.empty:
@@ -157,12 +171,11 @@ for category, item in choices.items():
         prot = row["Πρωτεΐνη (g)"].values[0]
         carb = row["Υδατάνθρακες (g)"].values[0]
         fat = row["Λίπος (g)"].values[0]
-        sat_fat = row["Κορεσμένα (g)"].values[0]
         fiber = row["Φυτικές ίνες (g)"].values[0]
-        
+        sat_fat = row["Κορεσμένα (g)"].values[0]
     else:
         cal = prot = carb = fat = fiber = 0
-        sat_fat = 0  # FIX: αποφυγή UnboundLocalError
+        sat_fat = 0  # avoid UnboundLocalError
 
     rows.append({
         "Κατηγορία": category,
@@ -173,12 +186,11 @@ for category, item in choices.items():
         "Λίπος (g)": fat,
         "Κορεσμένα (g)": sat_fat,
         "Φυτικές ίνες (g)": fiber
-        
     })
 
 selected_df = pd.DataFrame(rows)
 
-# --- Υπολογισμοί ---
+# Totals
 total_cal = selected_df["Θερμίδες (kcal)"].sum()
 total_prot = selected_df["Πρωτεΐνη (g)"].sum()
 total_carb = selected_df["Υδατάνθρακες (g)"].sum()
@@ -186,108 +198,110 @@ total_fat = selected_df["Λίπος (g)"].sum()
 total_fiber = selected_df["Φυτικές ίνες (g)"].sum()
 total_sat_fat = selected_df["Κορεσμένα (g)"].sum()
 
-# --- Ποσοστά θερμίδων ανά μακρο ---
+# Macro % of total calories (should ≈100%)
 if total_cal > 0:
     prot_pct_cal = round((total_prot * 4) / total_cal * 100, 1)
     carb_pct_cal = round((total_carb * 4) / total_cal * 100, 1)
-    fat_pct_cal = round((total_fat * 9) / total_cal * 100, 1)
+    fat_pct_cal  = round((total_fat  * 9) / total_cal * 100, 1)
 else:
     prot_pct_cal = carb_pct_cal = fat_pct_cal = 0.0
 
-# --- Κάλυψη στόχων ---
+# Targets & coverage
 prot_target, carb_target, fat_target, fiber_target, sat_fat_target = 150, 200, 70, 25, 20
-prot_cov = round((total_prot / prot_target) * 100, 1)
-carb_cov = round((total_carb / carb_target) * 100, 1)
-fat_cov = round((total_fat / fat_target) * 100, 1)
-fiber_cov = round((total_fiber / fiber_target) * 100, 1)
-sat_fat_cov = round((total_sat_fat / sat_fat_target) * 100, 1)
+prot_cov  = round((total_prot     / prot_target)  * 100, 1) if prot_target else 0.0
+carb_cov  = round((total_carb     / carb_target)  * 100, 1) if carb_target else 0.0
+fat_cov   = round((total_fat      / fat_target)   * 100, 1) if fat_target  else 0.0
+fiber_cov = round((total_fiber    / fiber_target) * 100, 1) if fiber_target else 0.0
+sat_fat_cov = round((total_sat_fat / sat_fat_target) * 100, 1) if sat_fat_target else 0.0
 
-# --- Εμφάνιση σύνολο ---
+# Display totals
 st.subheader("Σύνολο:")
 st.write(f"**Θερμίδες:** {total_cal} kcal")
-st.write(f"**Πρωτεΐνη:** {total_prot} g ({prot_pct_cal}% θερμίδων) | **Υδατάνθρακες:** {total_carb} g ({carb_pct_cal}% θερμίδων) | **Λίπος:** {total_fat} g ({fat_pct_cal}% θερμίδων)")
+st.write(
+    f"**Πρωτεΐνη:** {total_prot} g ({prot_pct_cal}% θερμίδων) | "
+    f"**Υδατάνθρακες:** {total_carb} g ({carb_pct_cal}% θερμίδων) | "
+    f"**Λίπος:** {total_fat} g ({fat_pct_cal}% θερμίδων)"
+)
 st.write(f"**Κορεσμένα:** {total_sat_fat} g | **Φυτικές ίνες:** {total_fiber} g")
 
-# --- Progress Bars Κάλυψης Στόχων ---
+# Progress bars (coverage)
 st.subheader("Κάλυψη Στόχων:")
-st.write(f"Πρωτεΐνη: {prot_cov}%")
-st.progress(min(total_prot / prot_target, 1.0))
-st.write(f"Υδατάνθρακες: {carb_cov}%")
-st.progress(min(total_carb / carb_target, 1.0))
-st.write(f"Λίπος: {fat_cov}%")
-st.progress(min(total_fat / fat_target, 1.0))
-st.write(f"Φυτικές ίνες: {fiber_cov}%")
-st.progress(min(total_fiber / fiber_target, 1.0))
-st.write(f"Κορεσμένα: {sat_fat_cov}%")
-st.progress(min(total_sat_fat / sat_fat_target, 1.0))
+st.write(f"Πρωτεΐνη: {prot_cov}%");      st.progress(min(total_prot / prot_target, 1.0))
+st.write(f"Υδατάνθρακες: {carb_cov}%");  st.progress(min(total_carb / carb_target, 1.0))
+st.write(f"Λίπος: {fat_cov}%");          st.progress(min(total_fat / fat_target, 1.0))
+st.write(f"Φυτικές ίνες: {fiber_cov}%"); st.progress(min(total_fiber / fiber_target, 1.0))
+st.write(f"Κορεσμένα: {sat_fat_cov}%");  st.progress(min(total_sat_fat / sat_fat_target, 1.0))
 
-# --- Pie Chart με θερμίδες μακρο ---
+# Pie with kcal (4/4/9)
 if total_cal > 0:
-    macros_kcal = {"Πρωτεΐνη": total_prot * 4, "Υδατάνθρακες": total_carb * 4, "Λίπος": total_fat * 9}
-    fig = px.pie(values=list(macros_kcal.values()), names=list(macros_kcal.keys()), title="Κατανομή Μακρο (σε θερμίδες)")
+    macros_kcal = {
+        "Πρωτεΐνη": total_prot * 4,
+        "Υδατάνθρακες": total_carb * 4,
+        "Λίπος": total_fat * 9
+    }
+    fig = px.pie(values=list(macros_kcal.values()), names=list(macros_kcal.keys()),
+                 title="Κατανομή Μακρο (σε θερμίδες)")
     st.plotly_chart(fig)
 
-# --- Εμφάνιση επιλογών ---
+# Show selections
 st.write("Αναλυτικά:")
 st.dataframe(selected_df)
 
-# --- Επιλογή ημερομηνίας ---
+# Date picker
 selected_date = st.date_input("Ημερομηνία καταχώρησης", value=datetime.date.today())
 
-# --- Αποθήκευση ---
+# Percent cells as FRACTIONS for Sheets (so 20.4% -> 0.204)
+prot_pct_cell    = prot_pct_cal / 100.0
+carb_pct_cell    = carb_pct_cal / 100.0
+fat_pct_cell     = fat_pct_cal  / 100.0
+sat_fat_pct_cell = sat_fat_cov  / 100.0  # coverage %
+fiber_pct_cell   = fiber_cov    / 100.0  # coverage %
 
-prot_pct_cell = prot_pct_cal / 100.0      # 20.4% -> 0.204
-carb_pct_cell = carb_pct_cal / 100.0
-fat_pct_cell  = fat_pct_cal  / 100.0
-
+# Save row
 if st.button("Αποθήκευση Ημέρας"):
     new_row = [
         str(selected_date),
         str(breakfast), str(snack1), str(main_meal),
         str(snack2), str(second_meal), str(snack3),
         int(total_cal),
-        float(total_prot), prot_pct_cell,
-        float(total_carb), carb_pct_cell,
-        float(total_fat), fat_pct_cell,
-        float(total_sat_fat), 
-        float(total_fiber)
+        float(total_prot),  prot_pct_cell,   # % of kcal (fraction)
+        float(total_carb),  carb_pct_cell,   # % of kcal (fraction)
+        float(total_fat),   fat_pct_cell,    # % of kcal (fraction)
+        float(total_sat_fat), sat_fat_pct_cell,  # total sat fat + coverage % (fraction)
+        float(total_fiber),  fiber_pct_cell      # total fiber + coverage % (fraction)
     ]
-
     try:
         all_rows = sheet.get_all_values()
-        data = all_rows[1:]
-        indices_to_delete = [i+2 for i, row in enumerate(data) if row and row[0] == str(selected_date)]
+        data_rows = all_rows[1:]
+        # replace existing date row(s)
+        indices_to_delete = [i + 2 for i, r in enumerate(data_rows) if r and r[0] == str(selected_date)]
         for idx in sorted(indices_to_delete, reverse=True):
             sheet.delete_rows(idx)
-        sheet.append_row(new_row)
+
+        # USER_ENTERED lets Sheets apply Percent format nicely
+        sheet.append_row(new_row, value_input_option="USER_ENTERED")
         st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε.")
-    except GSpreadException as e:
+    except GSpreadException:
         st.error("Αποτυχία αποθήκευσης στο Google Sheet. Έλεγξε δικαιώματα/headers και ξαναπροσπάθησε.")
 
-
-# --- Ιστορικό ---
-from gspread.exceptions import GSpreadException  # πάνω-πάνω στα imports
-
-# --- Ιστορικό ---
+# ---------- History (robust) ----------
 st.subheader("Ιστορικό Ημερών")
 
 def safe_history_df(ws):
-    """Ασφαλής ανάγνωση ιστορικού με fallback σε get_all_values."""
+    """Robust read: try get_all_records, else fall back to get_all_values and normalize."""
     try:
-        rows = ws.get_all_records()  # προσπαθούμε πρώτα το «έξυπνο»
+        rows = ws.get_all_records()  # requires clean headers & regular rows
         return pd.DataFrame(rows)
     except GSpreadException:
-        # Fallback όταν το φύλλο είναι άδειο/ασύμμετρο
         all_values = ws.get_all_values()
         if not all_values:
-            return pd.DataFrame()  # τελείως άδειο sheet
+            return pd.DataFrame()
         headers = all_values[0] if len(all_values) > 0 else []
-        data = all_values[1:] if len(all_values) > 1 else []
+        data_vals = all_values[1:] if len(all_values) > 1 else []
         if not headers:
-            return pd.DataFrame()  # δεν έχει καν headers
-        # Κανονικοποίηση μήκους γραμμών ώστε να «κουμπώνουν» με headers
+            return pd.DataFrame()
         norm = []
-        for r in data:
+        for r in data_vals:
             if len(r) < len(headers):
                 r = r + [""] * (len(headers) - len(r))
             elif len(r) > len(headers):
@@ -311,3 +325,28 @@ if not history_df.empty:
 else:
     st.info("Δεν υπάρχουν καταχωρήσεις ακόμα ή λείπουν headers (1η γραμμή).")
 
+# ---------- OPTIONAL: enforce Percent format in Sheets ----------
+# Run once per app start to ensure these columns show '%' properly.
+try:
+    percent_cols_0based = [9, 11, 13, 15, 17]  # Πρωτεΐνη_%, Υδατάνθρακες_%, Λίπος_%, Κορεσμένα_%, Φυτικές ίνες_%
+    requests = []
+    for col in percent_cols_0based:
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet._properties['sheetId'],
+                    "startRowIndex": 1,  # from row 2
+                    "startColumnIndex": col,
+                    "endColumnIndex": col + 1
+                },
+                "cell": {
+                    "userEnteredFormat": {"numberFormat": {"type": "PERCENT", "pattern": "0.0%"}}
+                },
+                "fields": "userEnteredFormat.numberFormat"
+            }
+        })
+    if requests:
+        sheet.spreadsheet.batch_update({"requests": requests})
+except Exception:
+    # Non-fatal if formatting fails (insufficient perms etc.)
+    pass
