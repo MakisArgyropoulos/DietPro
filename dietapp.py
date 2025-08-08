@@ -233,6 +233,7 @@ st.dataframe(selected_df)
 selected_date = st.date_input("Ημερομηνία καταχώρησης", value=datetime.date.today())
 
 # --- Αποθήκευση ---
+
 if st.button("Αποθήκευση Ημέρας"):
     new_row = [
         str(selected_date),
@@ -245,19 +246,51 @@ if st.button("Αποθήκευση Ημέρας"):
         float(total_fiber), float(fiber_cov)
     ]
 
-    all_rows = sheet.get_all_values()
-    data = all_rows[1:]
-    indices_to_delete = [i+2 for i, row in enumerate(data) if row and row[0] == str(selected_date)]
-    for idx in sorted(indices_to_delete, reverse=True):
-        sheet.delete_rows(idx)
-    sheet.append_row(new_row)
-    st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε.")
+    try:
+        all_rows = sheet.get_all_values()
+        data = all_rows[1:]
+        indices_to_delete = [i+2 for i, row in enumerate(data) if row and row[0] == str(selected_date)]
+        for idx in sorted(indices_to_delete, reverse=True):
+            sheet.delete_rows(idx)
+        sheet.append_row(new_row)
+        st.success(f"Η καταχώρηση για {selected_date} αποθηκεύτηκε.")
+    except GSpreadException as e:
+        st.error("Αποτυχία αποθήκευσης στο Google Sheet. Έλεγξε δικαιώματα/headers και ξαναπροσπάθησε.")
+
+
+# --- Ιστορικό ---
+from gspread.exceptions import GSpreadException  # πάνω-πάνω στα imports
 
 # --- Ιστορικό ---
 st.subheader("Ιστορικό Ημερών")
-rows = sheet.get_all_records()
-if rows:
-    history_df = pd.DataFrame(rows)
+
+def safe_history_df(ws):
+    """Ασφαλής ανάγνωση ιστορικού με fallback σε get_all_values."""
+    try:
+        rows = ws.get_all_records()  # προσπαθούμε πρώτα το «έξυπνο»
+        return pd.DataFrame(rows)
+    except GSpreadException:
+        # Fallback όταν το φύλλο είναι άδειο/ασύμμετρο
+        all_values = ws.get_all_values()
+        if not all_values:
+            return pd.DataFrame()  # τελείως άδειο sheet
+        headers = all_values[0] if len(all_values) > 0 else []
+        data = all_values[1:] if len(all_values) > 1 else []
+        if not headers:
+            return pd.DataFrame()  # δεν έχει καν headers
+        # Κανονικοποίηση μήκους γραμμών ώστε να «κουμπώνουν» με headers
+        norm = []
+        for r in data:
+            if len(r) < len(headers):
+                r = r + [""] * (len(headers) - len(r))
+            elif len(r) > len(headers):
+                r = r[:len(headers)]
+            norm.append(dict(zip(headers, r)))
+        return pd.DataFrame(norm)
+
+history_df = safe_history_df(sheet)
+
+if not history_df.empty:
     st.dataframe(history_df)
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -269,4 +302,5 @@ if rows:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 else:
-    st.info("Δεν υπάρχουν καταχωρήσεις ακόμα.")
+    st.info("Δεν υπάρχουν καταχωρήσεις ακόμα ή λείπουν headers (1η γραμμή).")
+
