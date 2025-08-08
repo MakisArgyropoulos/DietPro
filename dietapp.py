@@ -157,8 +157,9 @@ for category, item in choices.items():
         prot = row["Πρωτεΐνη (g)"].values[0]
         carb = row["Υδατάνθρακες (g)"].values[0]
         fat = row["Λίπος (g)"].values[0]
-        fiber = row["Φυτικές ίνες (g)"].values[0]
         sat_fat = row["Κορεσμένα (g)"].values[0]
+        fiber = row["Φυτικές ίνες (g)"].values[0]
+        
     else:
         cal = prot = carb = fat = fiber = 0
         sat_fat = 0  # FIX: αποφυγή UnboundLocalError
@@ -170,8 +171,9 @@ for category, item in choices.items():
         "Πρωτεΐνη (g)": prot,
         "Υδατάνθρακες (g)": carb,
         "Λίπος (g)": fat,
-        "Φυτικές ίνες (g)": fiber,
-        "Κορεσμένα (g)": sat_fat
+        "Κορεσμένα (g)": sat_fat,
+        "Φυτικές ίνες (g)": fiber
+        
     })
 
 selected_df = pd.DataFrame(rows)
@@ -204,7 +206,7 @@ sat_fat_cov = round((total_sat_fat / sat_fat_target) * 100, 1)
 st.subheader("Σύνολο:")
 st.write(f"**Θερμίδες:** {total_cal} kcal")
 st.write(f"**Πρωτεΐνη:** {total_prot} g ({prot_pct_cal}% θερμίδων) | **Υδατάνθρακες:** {total_carb} g ({carb_pct_cal}% θερμίδων) | **Λίπος:** {total_fat} g ({fat_pct_cal}% θερμίδων)")
-st.write(f"**Φυτικές ίνες:** {total_fiber} g | **Κορεσμένα:** {total_sat_fat} g")
+st.write(f"**Κορεσμένα:** {total_sat_fat} g | **Φυτικές ίνες:** {total_fiber} g")
 
 # --- Progress Bars Κάλυψης Στόχων ---
 st.subheader("Κάλυψη Στόχων:")
@@ -234,16 +236,21 @@ selected_date = st.date_input("Ημερομηνία καταχώρησης", val
 
 # --- Αποθήκευση ---
 
+prot_pct_cell = prot_pct_cal / 100.0      # 20.4% -> 0.204
+carb_pct_cell = carb_pct_cal / 100.0
+fat_pct_cell  = fat_pct_cal  / 100.0
+
 if st.button("Αποθήκευση Ημέρας"):
     new_row = [
         str(selected_date),
         str(breakfast), str(snack1), str(main_meal),
         str(snack2), str(second_meal), str(snack3),
         int(total_cal),
-        float(total_prot), float(prot_pct_cal),
-        float(total_carb), float(carb_pct_cal),
-        float(total_fat), float(fat_pct_cal),
-        float(total_fiber), float(fiber_cov)
+        float(total_prot), prot_pct_cell,
+        float(total_carb), carb_pct_cell,
+        float(total_fat), fat_pct_cell,
+        float(total_sat_fat), 
+        float(total_fiber)
     ]
 
     try:
